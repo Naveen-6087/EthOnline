@@ -214,6 +214,8 @@ async function fetchTokensFromChain(
 /**
  * Fetch token addresses across multiple chains in parallel
  */
+// Replace the entire fetchTokenAddressesMultichain function with this optimized version:
+
 export async function fetchTokenAddressesMultichain(
   daysToLookBack: number = 7,
   chains: typeof CHAINS = CHAINS
@@ -230,16 +232,35 @@ export async function fetchTokenAddressesMultichain(
     chains.map((chain) => fetchTokensFromChain(chain, daysToLookBack))
   );
 
-  // Collect successful results
-  const allTokens: TokenAddress[] = [];
+  // Use Map for efficient deduplication (handles 100k+ tokens without stack overflow)
+  const uniqueTokensMap = new Map<string, TokenAddress>();
+
   results.forEach((result, index) => {
     if (result.status === "fulfilled") {
-      allTokens.push(...result.value);
+      const chainTokens = result.value;
+      
+      // Add tokens to map, keeping earliest occurrence
+      for (const token of chainTokens) {
+        const key = token.address.toLowerCase();
+        
+        if (!uniqueTokensMap.has(key)) {
+          uniqueTokensMap.set(key, token);
+        } else {
+          // Keep the token with earliest timestamp
+          const existing = uniqueTokensMap.get(key)!;
+          if (token.firstSeenTimestamp < existing.firstSeenTimestamp) {
+            uniqueTokensMap.set(key, token);
+          }
+        }
+      }
     } else {
       const chainName = chains[index]?.name || "Unknown";
-      // Failed to fetch from chain
+      console.error(`❌ Failed to fetch from ${chainName}`);
     }
   });
+
+  // Convert map to array
+  const allTokens = Array.from(uniqueTokensMap.values());
 
   // Sort by most recent first
   allTokens.sort((a, b) => b.firstSeenTimestamp - a.firstSeenTimestamp);
@@ -248,7 +269,7 @@ export async function fetchTokenAddressesMultichain(
 
   console.log("\n✅ FETCH COMPLETE");
   console.log("━".repeat(70));
-  console.log(`Total tokens found: ${allTokens.length}`);
+  console.log(`Total unique tokens found: ${allTokens.length}`);
   console.log(`Duration: ${duration}s\n`);
 
   // Print distribution by chain
@@ -261,26 +282,6 @@ export async function fetchTokenAddressesMultichain(
     {} as Record<string, number>
   );
   console.table(distribution);
-
-  // Save to file
-  try {
-    const output = {
-      fetchedAt: new Date().toISOString(),
-      daysLookback: daysToLookBack,
-      totalTokens: allTokens.length,
-      chains: chains.map((c) => c.name),
-      distribution,
-      tokens: allTokens,
-    };
-
-    // await fs.writeFile(
-    //   "./multichain_token_addresses.json",
-    //   JSON.stringify(output, null, 2)
-    // );
-    console.log("\n💾 Saved to: ./multichain_token_addresses.json");
-  } catch (error) {
-    console.error("Failed to save file:", error);
-  }
 
   return allTokens;
 }
