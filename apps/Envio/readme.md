@@ -1,322 +1,380 @@
-# Envio Backend API
+# Envio HyperSync Integration Guide
 
-Backend API service for token analytics using Envio Hypersync and on-chain data.
+## 🚀 Overview
 
-## Features
-
-- 🔗 Fetch token metadata from blockchain
-- 📊 Aggregate token analytics data  
-- 💱 Track token transactions
-- 🚀 Real-time data from Hypersync
-- 📈 DexScreener market data integration
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js >= 18.0.0
-- npm, yarn, or pnpm
-
-### Installation
-
-```bash
-npm install
-```
-
-### Environment Setup
-
-Copy `.env.example` to `.env`:
-
-```bash
-cp .env.example .env
-```
-
-Update the following variables in `.env`:
-- `HYPERSYNC_BEARER_TOKEN` - Your Hypersync API token
-- `RPC_URL` - Ethereum RPC endpoint  
-- `PORT` - Server port (default: 3001)
-
-### Development
-
-```bash
-npm run dev
-```
-
-### Production
-
-```bash
-npm run build
-npm start
-```
-
-## API Endpoints
-
-- `GET /` - Health check
-- `GET /token-metadata/:address` - Token metadata and analytics
-- `GET /token-addresses` - List of tracked tokens
-- `GET /transactions/:address` - Token transactions
-
-## Deployment
-
-### Docker
-
-```bash
-docker-compose up -d
-```
-
-### Railway/Render/Heroku
-
-See full deployment guide in the README.
-
-## Data Flow Architecture
-
-📁 Input Data
-    ├── token_transactions.json (6,896 transactions)
-    └── token_analysis.json (market data)
-           ↓
-    ┌──────────────────────────────────┐
-    │   1. DATA LOADING PHASE          │
-    └──────────────────────────────────┘
-           ↓
-    addTransactions() → Sort by timestamp
-    addTokenData() → Store market info
-           ↓
-    ┌──────────────────────────────────┐
-    │   2. ANALYSIS PHASE              │
-    │   analyzeOnChain()               │
-    └──────────────────────────────────┘
-           ↓
-    ┌─────────────────────────────────────────┐
-    │  3. METRIC CALCULATIONS (Parallel)      │
-    ├─────────────────────────────────────────┤
-    │  A. Volume Analysis                     │
-    │     - Parse all transaction values      │
-    │     - Calculate 24h/7d/30d volumes      │
-    │     - Find avg/median values            │
-    │                                         │
-    │  B. Address Analysis                    │
-    │     - Extract unique addresses          │
-    │     - Count active participants         │
-    │     - Calculate tx velocity             │
-    │                                         │
-    │  C. Whale Detection                     │
-    │     - Identify large txs (>1% supply)   │
-    │     - Calculate whale volume            │
-    │     - Track concentration               │
-    │                                         │
-    │  D. Buy/Sell Pressure                   │
-    │     - Detect DEX interactions           │
-    │     - Calculate buy vs sell ratio       │
-    │     - Compare avg sizes                 │
-    │                                         │
-    │  E. Distribution Analysis               │
-    │     - Build holder balance map          │
-    │     - Calculate Gini coefficient        │
-    │     - Measure top 10 concentration      │
-    │                                         │
-    │  F. Time Pattern Analysis               │
-    │     - Find peak activity hours          │
-    │     - Identify most active days         │
-    │     - Detect trends                     │
-    │                                         │
-    │  G. Risk Detection                      │
-    │     - Check for wash trading            │
-    │     - Detect honeypot patterns          │
-    │     - Flag suspicious spikes            │
-    └─────────────────────────────────────────┘
-           ↓
-    ┌──────────────────────────────────┐
-    │   4. SCORING PHASE               │
-    └──────────────────────────────────┘
-           ↓
-    Calculate 4 core scores:
-    ├── Liquidity Health (0-100)
-    ├── Activity Score (0-100)
-    ├── Distribution Score (0-100)
-    └── Momentum Score (-100 to +100)
-           ↓
-    ┌──────────────────────────────────┐
-    │   5. COMBINATION PHASE           │
-    │   generateCombinedAnalysis()     │
-    └──────────────────────────────────┘
-           ↓
-    Combine all metrics:
-    ├── Calculate overall score
-    ├── Determine investment signal
-    ├── Assess risk level
-    ├── Generate insights
-    └── Create warnings/opportunities
-           ↓
-    ┌──────────────────────────────────┐
-    │   6. OUTPUT PHASE                │
-    └──────────────────────────────────┘
-           ↓
-    📊 Final JSON Output
-
-
-
-# Endpoint details
-1. Get all the address from ERC20 contract
-http://localhost:3001/token-addresses
-
-2. Get the meta data of the a token
-http://localhost:3001/token-metadata/{address}
-eg: http://localhost:3001/token-metadata/0x40e5a14e1d151f34fea6b8e6197c338e737f9bf2
-
-3. Get the transactions fo the token
-http://localhost:3001/transactions/{address}
-eg: http://localhost:3001/transactions/0x40e5a14e1d151f34fea6b8e6197c338e737f9bf2
-
-
-
-
-
-# 🚀 Envio API — On-Chain Token Analyzer
-
-This service fetches token data, analyzes on-chain activity, computes a **trending score**, and stores results in **Redis** for fast access.  
-Built with **Express**, **Redis**, and **TypeScript**.
+Meme Sentinels leverages **Envio HyperSync** as its core blockchain data infrastructure to efficiently fetch and analyze token data across multiple EVM chains. HyperSync enables ultra-fast, cost-effective blockchain queries that would be impossible with traditional RPC methods.
 
 ---
 
-## ⚙️ Setup
+## 📊 What We Use Envio For
 
-1. Install dependencies:
-   ```bash
-   npm install
-Start the server:
+### 1. **Multi-Chain Token Discovery**
+Automatically discover thousands of newly deployed ERC-20 tokens across 6+ chains in real-time.
 
-bash
-Copy code
-npm run dev
-The API will run at:
-http://localhost:3001
+**Chains Supported:**
+- Ethereum (Chain ID: 1)
+- Base (Chain ID: 8453)
+- Polygon (Chain ID: 137)
+- Optimism (Chain ID: 10)
+- Arbitrum (Chain ID: 42161)
+- BSC (Chain ID: 56)
 
-🧩 API Endpoints
-1️⃣ GET /
-Description: Health check endpoint — confirms the API is running.
+### 2. **Token Transaction Analysis**
+Fetch complete transaction history for any token, including:
+- Transfer events
+- Approval events
+- Transaction metadata (gas, timestamps, block numbers)
+- Sender/receiver addresses
 
-Example Request:
+### 3. **Wallet Activity Tracking**
+Monitor top-performing wallet addresses and their trading patterns:
+- Track profit/loss calculations
+- Identify "smart money" movements
+- Discover other tokens traded by successful wallets
 
-bash
-Copy code
-curl http://localhost:3001/
-Example Response:
+---
 
-json
-Copy code
-"Envio API is running"
-2️⃣ POST /dbinit
-Description:
-Fetches all tokens from the blockchain, analyzes them, calculates their Trending Scores, and stores results in Redis.
-This endpoint is typically used during the initial setup.
+## 🏗️ Architecture
 
-Example Request:
+### Core Components
 
-bash
-Copy code
-curl -X POST http://localhost:3001/dbinit
-Example Response:
+```
+├── multichain-address.ts        # Multi-chain token discovery
+├── multichain-transactions.ts   # Transaction history fetching
+├── multichain-wallet.ts         # Wallet activity analysis
+└── fetch-token-metadata.ts      # Token metadata enrichment
+```
 
-json
-Copy code
-{
-  "message": "Database initialized successfully"
+### Data Flow
+
+```
+1. Token Discovery (HyperSync)
+   ↓
+2. Transaction Fetching (HyperSync)
+   ↓
+3. Metadata Enrichment (Viem/RPC)
+   ↓
+4. Analysis & Scoring (AI Agents)
+```
+
+---
+
+## 🔧 Implementation Details
+
+### 1. Token Discovery (`multichain-address.ts`)
+
+**Purpose:** Discover newly deployed tokens across multiple chains
+
+**How It Works:**
+- Scans Transfer events (`0xddf252ad...`) across specified time ranges
+- Tracks first occurrence of each token address
+- Filters by age (e.g., last 24 hours for meme coin candidates)
+- Deduplicates across chains efficiently using Map structures
+
+**Key Features:**
+```typescript
+// Fetch tokens from last 7 days across all chains
+const tokens = await fetchTokenAddressesMultichain(7);
+
+// Find meme coin candidates from last 24 hours
+const memeCandidates = await fetchRecentMemeCandidates(24);
+```
+
+**Performance:**
+- Processes 100,000+ events per batch
+- Handles millions of tokens without memory overflow
+- Parallel chain queries for maximum speed
+
+---
+
+### 2. Transaction Analysis (`multichain-transactions.ts`)
+
+**Purpose:** Fetch complete transaction history for any token
+
+**Events Tracked:**
+- `Transfer(address,address,uint256)` - Token transfers
+- `Approval(address,address,uint256)` - Token approvals
+
+**Data Retrieved:**
+- Block number and timestamp
+- Transaction hash and index
+- Sender/receiver addresses
+- Gas used and gas price
+- Event-specific data (amounts, addresses)
+
+**Key Features:**
+```typescript
+// Get all transactions for a token across all chains
+const { allTransactions, aggregatedStats } = 
+  await getAllTokenTransactionsMultichain(tokenAddress);
+
+// Get transactions for specific chains only
+const data = await getAllTokenTransactionsMultichain(
+  tokenAddress, 
+  [1, 8453] // Ethereum and Base only
+);
+```
+
+**Statistics Generated:**
+- Total transaction count
+- Transfer vs approval breakdown
+- Unique address count
+- Activity timeline (first/last transaction)
+- Transactions per hour rate
+
+---
+
+### 3. Wallet Analysis (`multichain-wallet.ts`)
+
+**Purpose:** Analyze wallet profitability and discover their other token holdings
+
+**How It Works:**
+1. Fetch all Transfer events for a specific token
+2. Calculate profit/loss per wallet (sold - bought)
+3. Identify top 5 most profitable wallets
+4. For each top wallet, scan recent 24h activity
+5. Discover other tokens they're trading (up to 50 per wallet)
+
+**Key Features:**
+```typescript
+const { topWallets, otherTokens } = 
+  await analyzeTokenWalletsMultiChain(tokenAddress);
+
+// Returns:
+// - Top 5 profitable wallets with profit calculations
+// - Up to 50 other tokens each wallet has interacted with
+// - Chain information for each token
+```
+
+**Use Cases:**
+- Identify "smart money" following patterns
+- Discover trending tokens before they pump
+- Track whale movements and copy trades
+
+---
+
+## 📦 Configuration
+
+### Environment Variables
+
+```bash
+# Optional: HyperSync Bearer Token (for higher rate limits)
+HYPERSYNC_BEARER_TOKEN=your_token_here
+
+# Chain-specific RPC URLs (fallbacks provided)
+ETH_RPC_URL=https://eth.llamarpc.com
+ARB_RPC_URL=https://arb1.arbitrum.io/rpc
+BASE_RPC_URL=https://mainnet.base.org
+OP_RPC_URL=https://mainnet.optimism.io
+POLYGON_RPC_URL=https://polygon-rpc.com
+BSC_RPC_URL=https://bsc-dataseed.binance.org
+```
+
+### Chain Configuration
+
+```typescript
+const CHAIN_CONFIGS = {
+  eth: {
+    chainId: 1,
+    hypersyncUrl: "https://eth.hypersync.xyz",
+    blockTime: 12, // seconds
+  },
+  base: {
+    chainId: 8453,
+    hypersyncUrl: "https://base.hypersync.xyz",
+    blockTime: 2,
+  },
+  // ... more chains
+};
+```
+
+---
+
+## ⚡ Performance Optimizations
+
+### 1. **Batch Processing**
+- Fetches 100,000 events per query
+- Minimal rate limiting (30ms between batches)
+- Parallel chain queries for multi-chain operations
+
+### 2. **Efficient Data Structures**
+- Map-based deduplication (handles 100k+ tokens)
+- Avoids array concat for large datasets
+- Streams data instead of loading all at once
+
+### 3. **Smart Filtering**
+- Early termination when batch returns < 100k events
+- Block range calculations based on chain block times
+- Targeted queries using event signatures
+
+### 4. **Memory Management**
+```typescript
+// ❌ Bad: Array spread with large datasets
+const allTokens = [...chain1Tokens, ...chain2Tokens];
+
+// ✅ Good: Map-based aggregation
+const tokenMap = new Map();
+for (const token of chainTokens) {
+  tokenMap.set(token.address, token);
 }
-What happens under the hood:
+```
 
-Calls fetchTokenAddresses() → fetches all tokens
+---
 
-Calls getAllTokenTransactions() for each token
+## 📈 Data Output Examples
 
-Calls metadata() → fetches token details
-
-Runs OnChainAggregator to compute metrics
-
-Calculates a Trending Score and stores it in Redis
-
-Each token entry in Redis looks like:
-
-json
-Copy code
+### Token Discovery Output
+```json
 {
   "address": "0x1234...",
-  "trendingscore": 78,
-  "block": 21785432,
-  "timestamp": 1735068410
+  "chainId": 8453,
+  "chainName": "Base",
+  "firstSeenBlock": 12345678,
+  "firstSeenTimestamp": 1735123456,
+  "transactionHash": "0xabcd...",
+  "ageInHours": 2
 }
-3️⃣ POST /refresh-tokens
-Description:
-Fetches only the newly deployed tokens (e.g., from the past 2 days), analyzes them, and updates Redis — skipping tokens that already exist.
+```
 
-Example Request:
-
-bash
-Copy code
-curl -X POST http://localhost:3001/refresh-tokens
-Example Response:
-
-json
-Copy code
+### Transaction Analysis Output
+```json
 {
-  "message": "New tokens fetched and updated successfully"
+  "blockNumber": 12345678,
+  "timestamp": 1735123456,
+  "transactionHash": "0xabcd...",
+  "from": "0x1234...",
+  "to": "0x5678...",
+  "eventType": "Transfer",
+  "eventData": {
+    "from": "0x1234...",
+    "to": "0x5678...",
+    "value": "1000000000000000000"
+  },
+  "chainId": 8453,
+  "chainName": "Base"
 }
-Behavior:
+```
 
-Calls fetchTokenAddresses(2) → looks back 2 days
+### Wallet Analysis Output
+```json
+{
+  "topWallets": [
+    {
+      "address": "0x1234...",
+      "totalBought": "5000000000000000000",
+      "totalSold": "8000000000000000000",
+      "profit": "3000000000000000000",
+      "chain": "base"
+    }
+  ],
+  "otherTokens": {
+    "0x1234...": [
+      {
+        "token": "0xabcd...",
+        "chain": "base"
+      }
+    ]
+  }
+}
+```
 
-Skips tokens that already exist in Redis
+---
 
-Calculates and updates trending scores for new ones
+## 🎯 Why HyperSync?
 
-4️⃣ Scheduled Task (⏰ Hourly Auto-Refresh)
-Description:
-Automatically fetches and analyzes new tokens every hour, using the same logic as /refresh-tokens.
+### Traditional RPC Limitations
+```typescript
+// ❌ Slow: 2-5 seconds per 1000 blocks
+// ❌ Expensive: Rate limited, requires paid plans
+// ❌ Unreliable: Timeouts, missing data
+```
 
-You can adjust the interval in src/index.ts:
+### HyperSync Advantages
+```typescript
+// ✅ Fast: 100,000+ events in <1 second
+// ✅ Cost-effective: Free tier with 100k events/query
+// ✅ Reliable: Purpose-built for large-scale queries
+```
 
-ts
-Copy code
-setInterval(async () => {
-  ...
-}, 60 * 60 * 1000); // every 1 hour
-For testing, it’s currently set to every 3 minutes.
+### Speed Comparison
+| Method | Time to Fetch 1M Events | Cost |
+|--------|------------------------|------|
+| Traditional RPC | ~2-3 hours | High (rate limits) |
+| Envio HyperSync | ~30 seconds | Free (with token) |
 
-📦 Redis Data Example
-After successful initialization or refresh, Redis will contain entries like:
+---
 
-Key (Token Address)	Value
-0xabc123...	{"address":"0xabc123...","trendingscore":74,"block":21785432,"timestamp":1735068410}
-0xdef456...	{"address":"0xdef456...","trendingscore":88,"block":21785490,"timestamp":1735070012}
+## 🔗 Integration with Other Components
 
-📊 Trending Score Formula
-ts
-Copy code
-score =
-  (activityScore * 0.25) +
-  (liquidityHealthScore * 0.2) +
-  (distributionScore * 0.15) +
-  (momentumScore * 0.1) +
-  (Math.min(buyVsSellRatio, 100) * 0.1) +
-  (Math.max(priceChange24h, -100) / 2);
-Scores are normalized between 0–100
+### 1. **Token Metadata Enrichment**
+After HyperSync discovery, we use Viem for metadata:
+```typescript
+const tokens = await fetchTokenAddressesMultichain(7);
+const enriched = await fetchTokenMetadata(tokens);
+```
 
-Represents token’s on-chain popularity & health
+### 2. **AI Agent Pipeline**
+HyperSync data feeds our multi-agent system:
+- **Scout Agent**: Uses token discovery data
+- **Yield Agent**: Analyzes transaction patterns
+- **Risk Agent**: Monitors wallet activities
+- **Alert Agent**: Tracks suspicious patterns
 
-🧠 Tech Stack
-Express.js — API server
+### 3. **Immutable Logging**
+Important findings logged to Hedera HCS:
+```typescript
+// Token discovered → Log to HCS
+// Suspicious pattern → Log to HCS
+// AI decision → Log to HCS
+```
 
-Redis — Fast in-memory data storage
+---
 
-TypeScript — Type safety and maintainability
+## 📚 Resources
 
-OnChainAggregator — Custom analytics engine
+- [Envio HyperSync Docs](https://docs.envio.dev/docs/HyperSync/overview)
+- [HyperSync Client SDK](https://github.com/enviodev/hypersync-client-node)
+- [Supported Chains](https://docs.envio.dev/docs/HyperSync/hypersync-supported-networks)
+- [Query Examples](https://docs.envio.dev/docs/HyperSync/hypersync-query)
 
-🧪 Example Workflow
-Start the server
+---
 
-Run /dbinit to populate Redis
+## 🛠️ Troubleshooting
 
-Run /refresh-tokens every few hours (auto-scheduled or manually)
+### Common Issues
 
-Read from Redis for fast trending-token data
+**1. Rate Limiting**
+```typescript
+// Solution: Add bearer token and reduce concurrency
+const client = HypersyncClient.new({
+  url: chain.url,
+  bearerToken: process.env.HYPERSYNC_BEARER_TOKEN
+});
+```
 
+**2. Memory Issues with Large Datasets**
+```typescript
+// Solution: Use Map instead of array operations
+const tokenMap = new Map();
+// ... instead of array.concat()
+```
+
+**3. Missing Data**
+```typescript
+// Solution: Always check for null/undefined
+if (!log?.address || !log.topics) continue;
+```
+
+---
+
+## 🚀 Future Enhancements
+
+- [ ] WebSocket streaming for real-time updates
+- [ ] GraphQL integration for complex queries
+- [ ] On-demand indexing for custom events
+- [ ] Enhanced caching layer for frequently accessed data
+- [ ] Support for additional chains (Avalanche, Fantom)
+
+---
+
+Built with ❤️ using Envio HyperSync
